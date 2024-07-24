@@ -1,0 +1,15 @@
+[windows]
+commands = [
+    'Write-Host "This is a test command." '
+]
+
+[windows.links]
+original = 'link'
+
+[linux]
+commands = [
+    'echo "This is a test command." '
+]
+
+[linux.links]
+original = 'link'
