@@ -2,8 +2,8 @@ use std::fs;
 use toml::Table;
 // use std::process::Command;
 
-pub fn init() {
-    println!("There is nothing!")
+pub fn init(path: String) {
+    println!("This is init, I received {}", path);
 }
 
 pub fn new(programs: &[String]) {
