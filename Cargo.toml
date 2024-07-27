@@ -3,9 +3,14 @@ name = "once"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "once_lib"
+crate_type = ["rlib"]
+
 [dependencies]
 toml = "0.8.15"
 structopt = { version = "0.3", default-features = false }
 dirs = "5.0.1"
 log = "0.4.22"
 env_logger = "0.11.5"
+serde = { version = "1.0", features = ["derive"] }

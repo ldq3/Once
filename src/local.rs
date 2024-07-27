@@ -1,11 +1,27 @@
 use std::{
     fs,
     path::{self, PathBuf},
+    os::unix::fs as ufs,
 };
+use dirs;
 use std::io::{self, Write};
 use toml::Table;
 use std::io::prelude::*;
+use serde::Deserialize;
+use once_lib;
 // use std::process::Command;
+
+#[derive(Deserialize)]
+struct Once {
+    windows: Config,
+    linux: Config,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    commands: Vec<String>,
+    links: Table
+}
 
 pub fn init(root: path::PathBuf) {
     let config_path = crate::get_config_path();
@@ -50,18 +66,30 @@ pub fn check(programs: &[String]) {
 }
 
 pub fn link(programs: &[String]) {
-    println!("This is link! I receive {:?}", programs);
-
     for program in programs.iter() {
-        let contents = fs::read_to_string(program)
+        let mut program_config = PathBuf::new();
+        program_config.push(program.clone());
+        program_config.push("once.toml");
+
+        println!("{:?}", program_config);
+        let contents = fs::read_to_string(program_config)
         .expect("Something went wrong reading the file");
 
-        println!("With text:\n{}", contents);
+        let value: Once = toml::from_str(contents.as_str()).unwrap();
 
-        let value = contents.parse::<Table>().unwrap();
+        for (key, value) in value.linux.links.iter() {
+            let mut original = PathBuf::new();
+            original.push(program);
+            original.push("settings");
+            original.push(key);
 
-        println!("Hi! {:?}", value["package"]["name"]);
+            let link = path::PathBuf::from(value.as_str().unwrap());
 
+            let link = once_lib::replace_home(link);
+            println!("{:?}, {:?}", original, link);
+            ufs::symlink(original, link).expect("Something wrong");
+        }
+        
         // std::os::unix::fs::symlink and std::os::windows::fs::{symlink_file, symlink_dir}
     }
 }

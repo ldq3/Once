@@ -12,4 +12,4 @@ commands = [
 ]
 
 [linux.links]
-original = 'link'
+setting = '~/private/my_project/Once/setting'
