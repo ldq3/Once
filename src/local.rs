@@ -95,7 +95,25 @@ pub fn link(programs: &[String]) {
 }
 
 pub fn unlink(programs: &[String]) {
-    println!("This is unlink! I receive {:?}", programs)
+    for program in programs.iter() {
+        let mut program_config = PathBuf::new();
+        program_config.push(program.clone());
+        program_config.push("once.toml");
+
+        println!("{:?}", program_config);
+        let contents = fs::read_to_string(program_config)
+        .expect("Something went wrong reading the file");
+
+        let value: Once = toml::from_str(contents.as_str()).unwrap();
+
+        for (_, value) in value.linux.links.iter() {
+            let link = path::PathBuf::from(value.as_str().unwrap());
+
+            let link = once_lib::replace_home(link);
+            println!("{:?}", link);
+            fs::remove_file(link).expect("link doesn't exist")
+        }
+    }
 }
 
 pub fn install(programs: &[String]) {
