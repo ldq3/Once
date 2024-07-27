@@ -1,9 +1,32 @@
-use std::fs;
+use std::{
+    fs,
+    path::{self, PathBuf},
+};
+use dirs;
 use toml::Table;
+use std::io::prelude::*;
 // use std::process::Command;
 
-pub fn init(path: String) {
-    println!("This is init, I received {}", path);
+pub fn init(root: path::PathBuf) {
+    let home_path = dirs::home_dir().expect("Can not reach home dir.");
+    let mut config_path = home_path.clone();
+    config_path.push(".config");
+    config_path.push("once");
+
+    let mut file = match fs::File::create_new(&config_path) {
+        Err(why) => panic!("couldn't open {}: {:?}", config_path.display(), why),
+        Ok(file) => file,
+    };
+
+    let root_str = root.to_str().expect("Path is not valid UTF-8");
+    println!("root_str:{}", &root_str);
+
+    match file.write_all(root_str.as_bytes()) {
+        Err(why) => panic!("couldn't read {}: {:?}", config_path.display(), why),
+        Ok(_) => println!("successfully wrote to {}", config_path.display()),
+    }
+
+    println!("This is init, I received {}", root.display());
 }
 
 pub fn new(programs: &[String]) {
