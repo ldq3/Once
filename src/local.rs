@@ -66,8 +66,10 @@ pub fn check(programs: &[String]) {
 }
 
 pub fn link(programs: &[String]) {
+    let root = crate::get_root_path();
+    
     for program in programs.iter() {
-        let mut program_config = PathBuf::new();
+        let mut program_config = root.clone();
         program_config.push(program.clone());
         program_config.push("once.toml");
 
@@ -79,6 +81,7 @@ pub fn link(programs: &[String]) {
 
         for (key, value) in value.linux.links.iter() {
             let mut original = PathBuf::new();
+            original.push(root.clone());
             original.push(program);
             original.push("settings");
             original.push(key);
