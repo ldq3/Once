@@ -8,10 +8,7 @@ use std::io::prelude::*;
 // use std::process::Command;
 
 pub fn init(root: path::PathBuf) {
-    let home_path = dirs::home_dir().expect("Can not reach home dir.");
-    let mut config_path = home_path.clone();
-    config_path.push(".config");
-    config_path.push("once");
+    let config_path = crate::get_config_path();
 
     let mut file = match fs::File::create_new(&config_path) {
         Err(why) => panic!("couldn't open {}: {:?}", config_path.display(), why),

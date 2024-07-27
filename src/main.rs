@@ -51,21 +51,23 @@ fn main() {
         init(root)
     } else {
         let root = {
-            let config_path = path::Path::new("~/.config/once");
-            let display = config_path.display();
+            let config_path = get_config_path();
+            let display = &config_path.display();
     
-            let mut file = match fs::File::open(config_path) {
+            let mut file = match fs::File::open(&config_path) {
                 Err(why) => panic!("couldn't open {}: {:?}", display, why),
                 Ok(file) => file,
             };
             let mut s = String::new();
             match file.read_to_string(&mut s) {
                 Err(why) => panic!("couldn't read {}: {:?}", display, why),
-                Ok(_) => print!("{} contains:\n{}", display, s),
+                Ok(_) => println!("{} contains:\n{}", display, s),
             }
     
             s
         };
+
+        println!("root: {}", root);
     
         match opt {
             Once::New { programs } => local::new(&programs),
@@ -79,6 +81,15 @@ fn main() {
             _ => help(),
         };
     };
+}
+
+fn get_config_path() -> PathBuf {
+    let home_path = dirs::home_dir().expect("Can not reach home dir.");
+    let mut config_path = home_path.clone();
+    config_path.push(".config");
+    config_path.push("once");
+
+    config_path
 }
 
 fn help() {
