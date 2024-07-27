@@ -41,45 +41,25 @@ enum Once {
 }
 
 fn main() {
-    let opt = Once::from_args();
-    println!("{:?}", opt);
+    env_logger::init();
 
     let os_type = env::consts::OS;
-    println!("{}", os_type);
+    log::debug!("OS: {}", os_type);
 
-    if let Once::Init { root } = opt {
-        init(root)
-    } else {
-        let root = {
-            let config_path = get_config_path();
-            let display = &config_path.display();
-    
-            let mut file = match fs::File::open(&config_path) {
-                Err(why) => panic!("couldn't open {}: {:?}", display, why),
-                Ok(file) => file,
-            };
-            let mut s = String::new();
-            match file.read_to_string(&mut s) {
-                Err(why) => panic!("couldn't read {}: {:?}", display, why),
-                Ok(_) => println!("{} contains:\n{}", display, s),
-            }
-    
-            s
-        };
+    let opt = Once::from_args();
+    log::debug!("command: {:?}", opt);
 
-        println!("root: {}", root);
-    
-        match opt {
-            Once::New { programs } => local::new(&programs),
-            Once::Check { programs } => local::check(&programs),
-            Once::Link { programs } => local::link(&programs),
-            Once::Unlink { programs } => local::unlink(&programs),
-            Once::Install { programs } => local::install(&programs),
-            Once::Immigrate { programs } => local::migrate(&programs),
-            Once::Search { programs } => remote::search(&programs),
-            Once::Import { programs } => remote::import_remote(&programs),
-            _ => help(),
-        };
+    match opt {
+        Once::Init { root } => init(root),
+        Once::New { programs } => local::new(&programs),
+        Once::Check { programs } => local::check(&programs),
+        Once::Link { programs } => local::link(&programs),
+        Once::Unlink { programs } => local::unlink(&programs),
+        Once::Install { programs } => local::install(&programs),
+        Once::Immigrate { programs } => local::migrate(&programs),
+        Once::Search { programs } => remote::search(&programs),
+        Once::Import { programs } => remote::import_remote(&programs),
+        _ => help(),
     };
 }
 
@@ -90,6 +70,23 @@ fn get_config_path() -> PathBuf {
     config_path.push("once");
 
     config_path
+}
+
+fn get_root_path() -> PathBuf {
+    let config_path = get_config_path();
+    let display = &config_path.display();
+
+    let mut file = match fs::File::open(&config_path) {
+        Err(why) => panic!("couldn't open {}: {:?}", display, why),
+        Ok(file) => file,
+    };
+    let mut s = String::new();
+    match file.read_to_string(&mut s) {
+        Err(why) => panic!("couldn't read {}: {:?}", display, why),
+        Ok(_) => println!("{} contains:\n{}", display, s),
+    }
+
+    s.into()
 }
 
 fn help() {
