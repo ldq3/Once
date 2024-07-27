@@ -2,7 +2,7 @@ use std::{
     fs,
     path::{self, PathBuf},
 };
-use dirs;
+use std::io::{self, Write};
 use toml::Table;
 use std::io::prelude::*;
 // use std::process::Command;
@@ -11,19 +11,34 @@ pub fn init(root: path::PathBuf) {
     let config_path = crate::get_config_path();
 
     let mut file = match fs::File::create_new(&config_path) {
-        Err(why) => panic!("couldn't open {}: {:?}", config_path.display(), why),
+        Err(reason) => {
+            if reason.kind() == std::io::ErrorKind::AlreadyExists {
+                println!("The config file {} already exists. Do you want to override it? (Y/N)", config_path.display());
+                // 读取用户输入
+                let mut input = String::new();
+                io::stdin().read_line(&mut input).expect("Failed to read line");
+                // 清除输入字符串末尾的换行符
+                input = input.trim().to_lowercase().to_string();
+                // 根据用户输入决定是否覆盖文件
+                if input == "y" {
+                    fs::File::create(&config_path).expect("Failed to create file")
+                } else {
+                    panic!("Exiting without overriding the file.");
+                }
+            } else {
+                panic!("Failed to create file: {}", reason);
+            }
+        },
         Ok(file) => file,
     };
 
     let root_str = root.to_str().expect("Path is not valid UTF-8");
-    println!("root_str:{}", &root_str);
-
+    
+    println!("Initializing once root:{}", &root_str);
     match file.write_all(root_str.as_bytes()) {
-        Err(why) => panic!("couldn't read {}: {:?}", config_path.display(), why),
-        Ok(_) => println!("successfully wrote to {}", config_path.display()),
+        Err(why) => panic!("couldn't write to {}: {:?}", config_path.display(), why),
+        Ok(_) => println!("successfully write to {}", config_path.display()),
     }
-
-    println!("This is init, I received {}", root.display());
 }
 
 pub fn new(programs: &[String]) {
