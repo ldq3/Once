@@ -9,6 +9,8 @@ use toml::Table;
 use std::io::prelude::*;
 use serde::Deserialize;
 use once_lib;
+
+use crate::get_root_path;
 // use std::process::Command;
 
 #[derive(Deserialize)]
@@ -22,6 +24,35 @@ struct Config {
     commands: Vec<String>,
     links: Table
 }
+
+#[derive(Deserialize)]
+struct Program {
+    files: Table,
+    folders: Vec<String>,
+}
+
+const PROGRAM: &str = r#"
+folders = ["settings", "states"]
+
+[files]
+"once.tmol" = '''
+[windows]
+commands = [
+    ' '
+]
+
+[windows.links]
+original = 'link'
+
+[linux]
+commands = [
+    ' '
+]
+
+[linux.links]
+original = 'link'
+'''
+"#;
 
 pub fn init(root: path::PathBuf) {
     let config_path = crate::get_config_path();
@@ -58,7 +89,36 @@ pub fn init(root: path::PathBuf) {
 }
 
 pub fn new(programs: &[String]) {
-    println!("This is new! I receive {:?}", programs)
+    let template: Program = toml::from_str(PROGRAM).unwrap();
+
+    let root = get_root_path();
+
+    for program in programs.iter() {
+        let mut program_dir = root.clone();
+        program_dir.push(program);
+
+        fs::create_dir(&program_dir).unwrap(); 
+
+        for (name, content) in template.files.iter() {
+            let mut path = PathBuf::new();
+            path.push(&program_dir);
+            path.push(name);
+
+            let parent = path.parent().unwrap();
+            fs::create_dir_all(parent).unwrap();
+
+            let content = content.as_str().unwrap();
+            fs::write(path, content).unwrap();
+        }
+
+        for folder in template.folders.iter() {
+            let mut path = PathBuf::new();
+            path.push(&program_dir);
+            path.push(folder);
+
+            fs::create_dir(path).unwrap();
+        }
+    }
 }
 
 pub fn check(programs: &[String]) {
