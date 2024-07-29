@@ -35,7 +35,7 @@ const PROGRAM: &str = r#"
 folders = ["settings", "states"]
 
 [files]
-"once.tmol" = '''
+"once.toml" = '''
 [windows]
 commands = [
     ' '
@@ -160,17 +160,20 @@ pub fn link(programs: &[String]) {
 pub fn unlink(programs: &[String]) {
     for program in programs.iter() {
         let mut program_config = PathBuf::new();
+
+        let root = get_root_path();
+
+        program_config.push(root.clone());
         program_config.push(program.clone());
         program_config.push("once.toml");
 
         println!("{:?}", program_config);
-        let contents = fs::read_to_string(program_config)
-        .expect("Something went wrong reading the file");
+        let contents = fs::read_to_string(program_config).unwrap();
 
         let value: Once = toml::from_str(contents.as_str()).unwrap();
 
-        for (_, value) in value.linux.links.iter() {
-            let link = path::PathBuf::from(value.as_str().unwrap());
+        for (_, link) in value.linux.links.iter() {
+            let link = path::PathBuf::from(link.as_str().unwrap());
 
             let link = once_lib::replace_home(link);
             println!("{:?}", link);
