@@ -1,8 +1,11 @@
 use std::{
     fs,
     path::{self, PathBuf},
-    os::unix::fs as ufs,
 };
+#[cfg(target_os = "linux")]
+use std::os::unix::fs as os_fs;
+#[cfg(target_os = "windows")]
+use std::os::windows::fs as os_fs;
 use dirs;
 use std::io::{self, Write};
 use toml::Table;
@@ -35,23 +38,26 @@ const PROGRAM: &str = r#"
 folders = ["settings", "states"]
 
 [files]
-"once.toml" = '''
+"once.toml" = """
+[links]
+original = 'link'
+
 [windows]
-commands = [
-    ' '
-]
+commands = '''
+Write-Host "Hello Once!"
+'''
 
 [windows.links]
 original = 'link'
 
 [linux]
-commands = [
-    ' '
-]
+commands = '''
+echo "Hello Once!"
+'''
 
 [linux.links]
 original = 'link'
-'''
+"""
 "#;
 
 pub fn init(root: path::PathBuf) {
@@ -96,7 +102,6 @@ pub fn new(programs: &[String]) {
     for program in programs.iter() {
         let mut program_dir = root.clone();
         program_dir.push(program);
-
         fs::create_dir(&program_dir).unwrap(); 
 
         for (name, content) in template.files.iter() {
@@ -150,7 +155,10 @@ pub fn link(programs: &[String]) {
 
             let link = once_lib::replace_home(link);
             println!("{:?}, {:?}", original, link);
-            ufs::symlink(original, link).expect("Something wrong");
+            #[cfg(target_os = "linux")]
+            os_fs::symlink(original, link).expect("Something wrong");
+            #[cfg(target_os = "windows")]
+            os_fs::symlink_file(original, link).expect("Something wrong");
         }
         
         // std::os::unix::fs::symlink and std::os::windows::fs::{symlink_file, symlink_dir}
