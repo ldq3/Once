@@ -38,23 +38,26 @@ const PROGRAM: &str = r#"
 folders = ["settings", "states"]
 
 [files]
-"once.toml" = '''
+"once.toml" = """
+[links]
+original = 'link'
+
 [windows]
-commands = [
-    ' '
-]
+commands = '''
+Write-Host "Hello Once!"
+'''
 
 [windows.links]
 original = 'link'
 
 [linux]
-commands = [
-    ' '
-]
+commands = '''
+echo "Hello Once!"
+'''
 
 [linux.links]
 original = 'link'
-'''
+"""
 "#;
 
 pub fn init(root: path::PathBuf) {
@@ -99,7 +102,6 @@ pub fn new(programs: &[String]) {
     for program in programs.iter() {
         let mut program_dir = root.clone();
         program_dir.push(program);
-
         fs::create_dir(&program_dir).unwrap(); 
 
         for (name, content) in template.files.iter() {
