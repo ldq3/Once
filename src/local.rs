@@ -1,6 +1,5 @@
 use std::{
-    fs,
-    path::{self, PathBuf},
+    fs, os, path::{self, PathBuf}
 };
 #[cfg(target_os = "linux")]
 use std::os::unix::fs as os_fs;
@@ -10,7 +9,7 @@ use dirs;
 use std::io::{self, Write};
 use toml::Table;
 use std::io::prelude::*;
-use serde::Deserialize;
+use serde::{de::value, Deserialize};
 use once_lib;
 
 use crate::get_root_path;
@@ -39,9 +38,6 @@ folders = ["settings", "states"]
 
 [files]
 "once.toml" = """
-[links]
-original = 'link'
-
 [windows]
 commands = '''
 Write-Host "Hello Once!"
@@ -146,11 +142,14 @@ pub fn link(programs: &[String]) {
         program_config.push("once.toml");
 
         println!("{:?}", program_config);
-        let contents = fs::read_to_string(program_config)
+        let mut contents = fs::read_to_string(program_config)
         .expect("Something went wrong reading the file");
+
+        contents = contents.replace("\r\n", "\n");
 
         let value: Once = toml::from_str(contents.as_str()).unwrap();
 
+        #[cfg(target_os = "linux")]
         for (key, value) in value.linux.links.iter() {
             let mut original = PathBuf::new();
             original.push(root.clone());
@@ -162,13 +161,29 @@ pub fn link(programs: &[String]) {
 
             let link = once_lib::replace_home(link);
             println!("{:?}, {:?}", original, link);
-            #[cfg(target_os = "linux")]
+            
             os_fs::symlink(original, link).expect("Something wrong");
-            #[cfg(target_os = "windows")]
-            os_fs::symlink_file(original, link).expect("Something wrong");
         }
-        
-        // std::os::unix::fs::symlink and std::os::windows::fs::{symlink_file, symlink_dir}
+
+        #[cfg(target_os = "windows")]
+        for (key, value) in value.windows.links.iter() {
+            let mut original = PathBuf::new();
+            original.push(root.clone());
+            original.push(program);
+            original.push("settings");
+            original.push(key);
+
+            let link = path::PathBuf::from(value.as_str().unwrap());
+
+            let link = once_lib::replace_home(link);
+            println!("{:?}, {:?}", original, link);
+            
+            if original.exists() && fs::metadata(&original).map_or(false, |md| md.is_dir()) {
+                os_fs::symlink_dir(original, link).expect("Something wrong");
+            } else if original.exists() && fs::metadata(&original).map_or(false, |md| md.is_file()){
+                os_fs::symlink_file(original, link).expect("Something wrong");
+            }
+        }
     }
 }
 
@@ -192,7 +207,7 @@ pub fn unlink(programs: &[String]) {
 
             let link = once_lib::replace_home(link);
             println!("{:?}", link);
-            fs::remove_file(link).expect("link doesn't exist")
+            fs::remove_file(link).expect("link doesn't exist");
         }
     }
 }
