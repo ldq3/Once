@@ -1,6 +1,5 @@
-use std::{env, fs, path};
+use std::{env, fs};
 use std::path::PathBuf;
-use local::init;
 use std::io::prelude::*;
 use structopt::StructOpt;
 
@@ -8,7 +7,7 @@ mod local;
 mod remote;
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "the stupid content tracker")]
+#[structopt(about = "the tool for managing your settings")]
 enum Once {
     Init {
         #[structopt(parse(from_os_str))]
@@ -50,7 +49,7 @@ fn main() {
     log::debug!("command: {:?}", opt);
 
     match opt {
-        Once::Init { root } => init(root),
+        Once::Init { root } => local::init(root),
         Once::New { programs } => local::new(&programs),
         Once::Check { programs } => local::check(&programs),
         Once::Link { programs } => local::link(&programs),
@@ -64,7 +63,7 @@ fn main() {
 }
 
 fn get_config_path() -> PathBuf {
-    let home_path = dirs::home_dir().expect("Can not reach home dir.");
+    let home_path = dirs::home_dir().unwrap();
     let mut config_path = home_path.clone();
     config_path.push(".config");
     config_path.push("once");
@@ -74,17 +73,10 @@ fn get_config_path() -> PathBuf {
 
 fn get_root_path() -> PathBuf {
     let config_path = get_config_path();
-    let display = &config_path.display();
 
-    let mut file = match fs::File::open(&config_path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
+    let mut file = fs::File::open(&config_path).expect("couldn't open config file: ~/.config/once");
     let mut s = String::new();
-    match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => println!("{} contains:\n{}", display, s),
-    }
+    file.read_to_string(&mut s).unwrap();
 
     s.into()
 }

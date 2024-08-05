@@ -67,12 +67,12 @@ pub fn init(root: path::PathBuf) {
         Err(reason) => {
             if reason.kind() == std::io::ErrorKind::AlreadyExists {
                 println!("The config file {} already exists. Do you want to override it? (Y/N)", config_path.display());
-                // 读取用户输入
+                
                 let mut input = String::new();
                 io::stdin().read_line(&mut input).expect("Failed to read line");
-                // 清除输入字符串末尾的换行符
-                input = input.trim().to_lowercase().to_string();
-                // 根据用户输入决定是否覆盖文件
+                
+                input = input.trim().to_lowercase().to_string(); // 清除输入字符串末尾的换行符
+
                 if input == "y" {
                     fs::File::create(&config_path).expect("Failed to create file")
                 } else {
@@ -86,12 +86,19 @@ pub fn init(root: path::PathBuf) {
     };
 
     let root_str = root.to_str().expect("Path is not valid UTF-8");
+    let root_path = path::PathBuf::from(root_str);
+    let root_path = once_lib::replace_home(root_path);
     
-    println!("Initializing once root:{}", &root_str);
-    match file.write_all(root_str.as_bytes()) {
-        Err(why) => panic!("couldn't write to {}: {:?}", config_path.display(), why),
-        Ok(_) => println!("successfully write to {}", config_path.display()),
+    if root_path.exists() && fs::metadata(&root_path).map_or(false, |md| md.is_dir()) {
+        println!("Initializing once root:{:?}", &root_path);
+        match file.write_all(root_path.as_os_str().as_encoded_bytes()) {
+            Err(why) => panic!("couldn't write to {}: {:?}", config_path.display(), why),
+            Ok(_) => println!("successfully write to {}", config_path.display()),
+        }
+    } else {
+        panic!("Invalid root path: {}", root_str);
     }
+
 }
 
 pub fn new(programs: &[String]) {

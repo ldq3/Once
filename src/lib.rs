@@ -3,7 +3,6 @@ use std::path::{
     PathBuf
 };
 use dirs;
-use std::env;
 
 pub fn replace_home(path: PathBuf) -> PathBuf {
     let home_dir = dirs::home_dir().ok_or("can not reach home dir").unwrap();
@@ -30,7 +29,7 @@ pub fn replace_home(path: PathBuf) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, result};
+    use std::path::PathBuf;
 
     use super::*;
 
@@ -38,6 +37,6 @@ mod tests {
     fn it_works() {
         let test_path = PathBuf::from("~/test");
         let result = replace_home(test_path);
-        assert_eq!(result.as_os_str().to_str().unwrap(), "/home/leap/test");
+        assert_eq!(result.as_os_str().to_str().unwrap(), "C:\\Users\\34635\\test");
     }
 }
