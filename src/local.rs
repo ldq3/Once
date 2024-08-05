@@ -145,6 +145,7 @@ pub fn link(programs: &[String]) {
         let mut contents = fs::read_to_string(program_config)
         .expect("Something went wrong reading the file");
 
+        // this is needed for Windows
         contents = contents.replace("\r\n", "\n");
 
         let value: Once = toml::from_str(contents.as_str()).unwrap();
@@ -198,11 +199,24 @@ pub fn unlink(programs: &[String]) {
         program_config.push("once.toml");
 
         println!("{:?}", program_config);
-        let contents = fs::read_to_string(program_config).unwrap();
+        let mut contents = fs::read_to_string(program_config).unwrap();
+
+        // this is needed for Windows
+        contents = contents.replace("\r\n", "\n");
 
         let value: Once = toml::from_str(contents.as_str()).unwrap();
 
+        #[cfg(target_os = "linux")]
         for (_, link) in value.linux.links.iter() {
+            let link = path::PathBuf::from(link.as_str().unwrap());
+
+            let link = once_lib::replace_home(link);
+            println!("{:?}", link);
+            fs::remove_file(link).expect("link doesn't exist");
+        }
+
+        #[cfg(target_os = "windows")]
+        for (_, link) in value.windows.links.iter() {
             let link = path::PathBuf::from(link.as_str().unwrap());
 
             let link = once_lib::replace_home(link);
