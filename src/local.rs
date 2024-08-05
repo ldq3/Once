@@ -23,7 +23,7 @@ struct Once {
 
 #[derive(Deserialize)]
 struct Config {
-    commands: Vec<String>,
+    commands: String,
     links: Table
 }
 
