@@ -58,7 +58,6 @@ fn main() {
         Once::Immigrate { programs } => local::migrate(&programs),
         Once::Search { programs } => remote::search(&programs),
         Once::Import { programs } => remote::import_remote(&programs),
-        _ => help(),
     };
 }
 
@@ -79,8 +78,4 @@ fn get_root_path() -> PathBuf {
     file.read_to_string(&mut s).unwrap();
 
     s.into()
-}
-
-fn help() {
-    println!("May you need help?")
 }

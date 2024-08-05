@@ -1,27 +1,28 @@
 use std::{
-    fs, os, path::{self, PathBuf}
+    fs,
+    path::{self, PathBuf}
 };
 #[cfg(target_os = "linux")]
 use std::os::unix::fs as os_fs;
 #[cfg(target_os = "windows")]
 use std::os::windows::fs as os_fs;
-use dirs;
 use std::io::{self, Write};
 use toml::Table;
-use std::io::prelude::*;
-use serde::{de::value, Deserialize};
-use once_lib;
+use serde::Deserialize;
+use once;
 
 use crate::get_root_path;
 // use std::process::Command;
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct Once {
     windows: Config,
     linux: Config,
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct Config {
     commands: String,
     links: Table
@@ -83,7 +84,7 @@ pub fn init(root: path::PathBuf) {
 
     let root_str = root.to_str().expect("Path is not valid UTF-8");
     let root_path = path::PathBuf::from(root_str);
-    let root_path = once_lib::replace_home(root_path);
+    let root_path = once::replace_home(root_path);
     
     if root_path.exists() && fs::metadata(&root_path).map_or(false, |md| md.is_dir()) {
         println!("Initializing once root:{:?}", &root_path);
@@ -160,7 +161,7 @@ pub fn link(programs: &[String]) {
 
             let link = path::PathBuf::from(value.as_str().unwrap());
 
-            let link = once_lib::replace_home(link);
+            let link = once::replace_home(link);
             println!("{:?}, {:?}", original, link);
             
             os_fs::symlink(original, link).expect("Something wrong");
@@ -176,7 +177,7 @@ pub fn link(programs: &[String]) {
 
             let link = path::PathBuf::from(value.as_str().unwrap());
 
-            let link = once_lib::replace_home(link);
+            let link = once::replace_home(link);
             println!("{:?}, {:?}", original, link);
             
             if original.exists() && fs::metadata(&original).map_or(false, |md| md.is_dir()) {
@@ -210,7 +211,7 @@ pub fn unlink(programs: &[String]) {
         for (_, link) in value.linux.links.iter() {
             let link = path::PathBuf::from(link.as_str().unwrap());
 
-            let link = once_lib::replace_home(link);
+            let link = once::replace_home(link);
             println!("{:?}", link);
             fs::remove_file(link).expect("link doesn't exist");
         }
@@ -219,7 +220,7 @@ pub fn unlink(programs: &[String]) {
         for (_, link) in value.windows.links.iter() {
             let link = path::PathBuf::from(link.as_str().unwrap());
 
-            let link = once_lib::replace_home(link);
+            let link = once::replace_home(link);
             println!("{:?}", link);
             fs::remove_file(link).expect("link doesn't exist");
         }

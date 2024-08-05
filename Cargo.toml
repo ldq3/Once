@@ -3,10 +3,6 @@ name = "once"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-name = "once_lib"
-crate_type = ["rlib"]
-
 [dependencies]
 toml = "0.8.15"
 structopt = { version = "0.3", default-features = false }
