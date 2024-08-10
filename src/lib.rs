@@ -30,6 +30,7 @@ pub fn replace_home(path: PathBuf) -> PathBuf {
     path
 }
 
+// FIXME: 在 Windows 上不能正确读取一些 Pwsh 环境变量，如 $PROFILE
 pub fn parse_env(path: PathBuf) -> PathBuf {
     let mut new_path = PathBuf::new();
 
