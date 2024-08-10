@@ -1,6 +1,9 @@
-use std::path::{
-    Component,
-    PathBuf
+use std::{
+    path::{
+        Component,
+        PathBuf
+    },
+    env,
 };
 use dirs;
 
@@ -27,6 +30,36 @@ pub fn replace_home(path: PathBuf) -> PathBuf {
     path
 }
 
+pub fn parse_env(path: PathBuf) -> PathBuf {
+    let mut new_path = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::Normal(component) => {
+                let component_str = component.to_str().unwrap_or("");
+                if component_str.starts_with('$') {
+                    // 提取环境变量名
+                    let var_name = &component_str[1..];
+                    // 获取环境变量的值
+                    let var_value = env::var(var_name).unwrap_or_else(|_| {
+                        eprintln!("无法解析环境变量: {}", var_name);
+                        std::process::exit(1);
+                    });
+                    new_path.push(var_value);
+                } else {
+                    new_path.push(component);
+                }
+            }
+            _ => {
+                // 处理其他类型的组件（如根目录、父目录等）
+                new_path.push(component.as_os_str());
+            }
+        }
+    }
+
+    new_path
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -34,9 +67,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn replace_home_0() {
         let test_path = PathBuf::from("~/test");
         let result = replace_home(test_path);
         assert_eq!(result.as_os_str().to_str().unwrap(), "C:\\Users\\34635\\test");
+    }
+
+    #[test]
+    fn parse_env_0() {
+        let test_path = PathBuf::from("$DriverData\\hi");
+        let result = parse_env(test_path);
+        assert_eq!(result.as_os_str().to_str().unwrap(), "C:\\Windows\\System32\\Drivers\\DriverData\\hi")
     }
 }

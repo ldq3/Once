@@ -214,6 +214,10 @@ pub fn unlink(programs: &[String]) {
             let link = once::replace_home(link);
             println!("{:?}", link);
             fs::remove_file(link).expect("link doesn't exist");
+            match fs::metadata(link.clone()) {
+                Ok(_) => fs::remove_file(link).expect("link doesn't exist"),
+                Err(_) => continue,
+            }
         }
 
         #[cfg(target_os = "windows")]
@@ -222,7 +226,11 @@ pub fn unlink(programs: &[String]) {
 
             let link = once::replace_home(link);
             println!("{:?}", link);
-            fs::remove_file(link).expect("link doesn't exist");
+            match fs::metadata(link.clone()) {
+                Ok(_) => fs::remove_file(link).expect("link doesn't exist"),
+                Err(_) => continue,
+            }
+            
         }
     }
 }
