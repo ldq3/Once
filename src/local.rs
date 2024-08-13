@@ -1,6 +1,5 @@
 use std::{
-    fs,
-    path::{self, PathBuf}
+    fs, io::ErrorKind, path::{self, PathBuf}
 };
 #[cfg(target_os = "linux")]
 use std::os::unix::fs as os_fs;
@@ -143,32 +142,21 @@ pub fn link(programs: &[String]) {
         program_config.push("once.toml");
 
         println!("{:?}", program_config);
-        let mut contents = fs::read_to_string(program_config)
+        let contents = fs::read_to_string(program_config)
         .expect("Something went wrong reading the file");
 
-        // this is needed for Windows
-        contents = contents.replace("\r\n", "\n");
+        #[cfg(target_os = "windows")]
+        let contents = contents.replace("\r\n", "\n");
 
         let value: Once = toml::from_str(contents.as_str()).unwrap();
 
-        #[cfg(target_os = "linux")]
-        for (key, value) in value.linux.links.iter() {
-            let mut original = PathBuf::new();
-            original.push(root.clone());
-            original.push(program);
-            original.push("settings");
-            original.push(key);
-
-            let link = path::PathBuf::from(value.as_str().unwrap());
-
-            let link = once::replace_home(link);
-            println!("{:?}, {:?}", original, link);
-            
-            os_fs::symlink(original, link).expect("Something wrong");
-        }
-
         #[cfg(target_os = "windows")]
-        for (key, value) in value.windows.links.iter() {
+        let links_iter = value.windows.links.iter();
+    
+        #[cfg(target_os = "linux")]
+        let links_iter = value.linux.links.iter();
+
+        for (key, value) in links_iter {
             let mut original = PathBuf::new();
             original.push(root.clone());
             original.push(program);
@@ -180,9 +168,23 @@ pub fn link(programs: &[String]) {
             let link = once::replace_home(link);
             println!("{:?}, {:?}", original, link);
             
-            if original.exists() && fs::metadata(&original).map_or(false, |md| md.is_dir()) {
+            if !original.exists() {
+                println!("{} doesn't exist", original.display());
+                continue;
+            }
+
+            if link.exists() {
+                println!("{} exists", link.display());
+                continue;
+            }
+            
+            #[cfg(target_os = "linux")]
+            os_fs::symlink(original, link).expect("Something wrong");
+
+            #[cfg(target_os = "windows")]
+            if fs::metadata(&original).map_or(false, |md| md.is_dir()) {
                 os_fs::symlink_dir(original, link).expect("Something wrong");
-            } else if original.exists() && fs::metadata(&original).map_or(false, |md| md.is_file()){
+            } else if fs::metadata(&original).map_or(false, |md| md.is_file()){
                 os_fs::symlink_file(original, link).expect("Something wrong");
             }
         }
@@ -200,30 +202,33 @@ pub fn unlink(programs: &[String]) {
         program_config.push("once.toml");
 
         println!("{:?}", program_config);
-        let mut contents = fs::read_to_string(program_config).unwrap();
-
-        // this is needed for Windows
-        contents = contents.replace("\r\n", "\n");
-
-        let value: Once = toml::from_str(contents.as_str()).unwrap();
-
-        #[cfg(target_os = "linux")]
-        for (_, link) in value.linux.links.iter() {
-            let link = path::PathBuf::from(link.as_str().unwrap());
-
-            let link = once::replace_home(link);
-            println!("{:?}", link);
-            fs::remove_file(link).expect("link doesn't exist");
-        }
+        let contents = fs::read_to_string(program_config).unwrap();
 
         #[cfg(target_os = "windows")]
-        for (_, link) in value.windows.links.iter() {
+        let contents = contents.replace("\r\n", "\n");
+
+        let value: Once = toml::from_str(contents.as_str()).unwrap();
+        
+        #[cfg(target_os = "windows")]
+        let links_iter = value.windows.links.iter();
+
+        #[cfg(target_os = "linux")]
+        let links_iter = value.linux.links.iter();
+
+        for (_, link) in links_iter {
             let link = path::PathBuf::from(link.as_str().unwrap());
 
             let link = once::replace_home(link);
-            println!("{:?}", link);
-            fs::remove_file(link).expect("link doesn't exist");
-        }
+            
+            match fs::remove_file(&link) {
+                Err(why) if why.kind() == ErrorKind::NotFound => {
+                    println!("link {} doesn't exit", link.display());
+                    continue;
+                },
+                Err(why) => panic!("couldn't remove {}: {:?}", link.display(), why),
+                Ok(_) => println!("successfully remove {}", link.display()),
+            };
+        }       
     }
 }
 
