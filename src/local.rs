@@ -1,241 +1,237 @@
 use std::{
-    fs, io::ErrorKind, path::{self, PathBuf}
+    fmt::format, fs::{ self, File }, io::Write, path::PathBuf,
 };
 #[cfg(target_os = "linux")]
 use std::os::unix::fs as os_fs;
 #[cfg(target_os = "windows")]
 use std::os::windows::fs as os_fs;
-use std::io::{self, Write};
-use toml::Table;
-use serde::Deserialize;
-use once;
+use toml::{ Table, Value };
+use anyhow::{ Context, Result };
+use dirs;
+use shellexpand::{tilde_with_context, env_with_context};
 
-use crate::get_root_path;
-// use std::process::Command;
+pub fn init(path: &str) -> Result<()> {
+    let path = abs(path);
+    let config_path = config_path();
 
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct Once {
-    windows: Config,
-    linux: Config,
-}
+    match root_path() {
+        Ok(root) => {
+            if path != root {
+                mov(&path)?;
 
-#[derive(Deserialize)]
-#[allow(dead_code)]
-struct Config {
-    commands: String,
-    links: Table
-}
-
-#[derive(Deserialize)]
-struct Program {
-    files: Table,
-    folders: Vec<String>,
-}
-
-const PROGRAM: &str = r#"
-folders = ["settings", "states"]
-
-[files]
-"once.toml" = """
-[windows]
-commands = '''
-Write-Host "Hello Once!"
-'''
-
-[windows.links]
-original = 'link'
-
-[linux]
-commands = '''
-echo "Hello Once!"
-'''
-
-[linux.links]
-original = 'link'
-"""
-"#;
-
-pub fn init(root: path::PathBuf) {
-    let config_path = crate::get_config_path();
-
-    let mut file = match fs::File::create_new(&config_path) {
-        Err(reason) => {
-            if reason.kind() == std::io::ErrorKind::AlreadyExists {
-                println!("The config file {} already exists. Do you want to override it? (Y/N)", config_path.display());
-                
-                let mut input = String::new();
-                io::stdin().read_line(&mut input).expect("Failed to read line");
-                
-                input = input.trim().to_lowercase().to_string(); // 清除输入字符串末尾的换行符
-
-                if input == "y" {
-                    fs::File::create(&config_path).expect("Failed to create file")
-                } else {
-                    panic!("Exiting without overriding the file.");
-                }
-            } else {
-                panic!("Failed to create file: {}", reason);
+                return Ok(());
             }
         },
-        Ok(file) => file,
-    };
-
-    let root_str = root.to_str().expect("Path is not valid UTF-8");
-    let root_path = path::PathBuf::from(root_str);
-    let root_path = once::replace_home(root_path);
-    
-    if root_path.exists() && fs::metadata(&root_path).map_or(false, |md| md.is_dir()) {
-        println!("Initializing once root:{:?}", &root_path);
-        match file.write_all(root_path.as_os_str().as_encoded_bytes()) {
-            Err(why) => panic!("couldn't write to {}: {:?}", config_path.display(), why),
-            Ok(_) => println!("successfully write to {}", config_path.display()),
-        }
-    } else {
-        panic!("Invalid root path: {}", root_str);
-    }
-
-}
-
-pub fn new(programs: &[String]) {
-    let template: Program = toml::from_str(PROGRAM).unwrap();
-
-    let root = get_root_path();
-
-    for program in programs.iter() {
-        let mut program_dir = root.clone();
-        program_dir.push(program);
-        fs::create_dir(&program_dir).unwrap(); 
-
-        for (name, content) in template.files.iter() {
-            let mut path = PathBuf::new();
-            path.push(&program_dir);
-            path.push(name);
-
-            let parent = path.parent().unwrap();
-            fs::create_dir_all(parent).unwrap();
-
-            let content = content.as_str().unwrap();
-            fs::write(path, content).unwrap();
-        }
-
-        for folder in template.folders.iter() {
-            let mut path = PathBuf::new();
-            path.push(&program_dir);
-            path.push(folder);
-
-            fs::create_dir(path).unwrap();
-        }
-    }
-}
-
-pub fn check(programs: &[String]) {
-    println!("This is check! I receive {:?}", programs)
-}
-
-pub fn link(programs: &[String]) {
-    let root = crate::get_root_path();
-    
-    for program in programs.iter() {
-        let mut program_config = root.clone();
-        program_config.push(program.clone());
-        program_config.push("once.toml");
-
-        println!("{:?}", program_config);
-        let contents = fs::read_to_string(program_config)
-        .expect("Something went wrong reading the file");
-
-        #[cfg(target_os = "windows")]
-        let contents = contents.replace("\r\n", "\n");
-
-        let value: Once = toml::from_str(contents.as_str()).unwrap();
-
-        #[cfg(target_os = "windows")]
-        let links_iter = value.windows.links.iter();
-    
-        #[cfg(target_os = "linux")]
-        let links_iter = value.linux.links.iter();
-
-        for (key, value) in links_iter {
-            let mut original = PathBuf::new();
-            original.push(root.clone());
-            original.push(program);
-            original.push("settings");
-            original.push(key);
-
-            let link = path::PathBuf::from(value.as_str().unwrap());
-
-            let link = once::replace_home(link);
-            println!("{:?}, {:?}", original, link);
-            
-            if !original.exists() {
-                println!("{} doesn't exist", original.display());
-                continue;
-            }
-
-            if link.exists() {
-                println!("{} exists", link.display());
-                continue;
-            }
-            
-            #[cfg(target_os = "linux")]
-            os_fs::symlink(original, link).expect("Something wrong");
-
-            #[cfg(target_os = "windows")]
-            if fs::metadata(&original).map_or(false, |md| md.is_dir()) {
-                os_fs::symlink_dir(original, link).expect("Something wrong");
-            } else if fs::metadata(&original).map_or(false, |md| md.is_file()){
-                os_fs::symlink_file(original, link).expect("Something wrong");
+        Err(e) => {
+            let io_err = e.downcast_ref::<std::io::Error>().unwrap();
+            if io_err.kind() != std::io::ErrorKind::NotFound {
+                return Err(e);
             }
         }
     }
+
+    let mut file = File::create(&config_path).context(format!("创建配置文件失败：{}", config_path.display()))?;
+    writeln!(file, "{}", path.display())?;
+
+    Ok(())
 }
 
-pub fn unlink(programs: &[String]) {
-    for program in programs.iter() {
-        let mut program_config = PathBuf::new();
+/**
+#FIXME
+*/
+pub fn mov(root: &PathBuf) -> Result<()> {
+    let path = root_path()?; 
 
-        let root = get_root_path();
+    if root.to_str() != path.to_str() {
+        fs::rename(&path, root).context(format!("移动文件失败，from: {:?}, to: {:?}。", path.to_str(), root.to_str()))?;
+    }
 
-        program_config.push(root.clone());
-        program_config.push(program.clone());
-        program_config.push("once.toml");
+    Ok(())
+}
 
-        println!("{:?}", program_config);
-        let contents = fs::read_to_string(program_config).unwrap();
+/**
+向
+*/
+pub fn new(program: &str, file: &str, link: &PathBuf) -> Result<()> { 
+    let mut table =  get_table(program)?;
+    
+    let path: Vec<Value> = link.iter()
+        .filter_map(|os_str| { os_str.to_str().map(|str| { Value::String(str.to_string())}) })
+        .collect();
 
-        #[cfg(target_os = "windows")]
-        let contents = contents.replace("\r\n", "\n");
+    table.insert(file.to_string(), toml::Value::Array(path));
+    fs::write(file, toml::to_string_pretty(&Value::Table(table))?)?;
+    
+    let file = root_path()?
+        .join(program)
+        .join("settings")
+        .join(file);
 
-        let value: Once = toml::from_str(contents.as_str()).unwrap();
+    symlink(&file, link)?;
+
+    Ok(())
+}
+
+pub fn list(program: &str) -> Result<Vec<(String, PathBuf, bool)>> {
+    let table = get_table(program)?;
+
+    let mut data = Vec::new();
+
+    for (file, value) in table { 
+        let file_path = root_path()?
+            .join(program)
+            .join("settings")
+            .join(&file);
+        let link_path = value.to_string();
+        let link_path = abs(link_path.trim_matches('"')); // to_string 会多出一队引号
+
+
+        if !link_path.exists() {
+            data.push((file, link_path.clone(), false));
+            continue;
+        }
         
-        #[cfg(target_os = "windows")]
-        let links_iter = value.windows.links.iter();
+        let metadata = fs::symlink_metadata(&link_path)
+            .with_context(|| format!("无法获取文件元数据: {}", &link_path.display()))?;
+        
+        if !metadata.file_type().is_symlink() {
+            data.push((file, link_path, false));
+            continue;
+        }
+        // 获取符号链接指向的目标
+        let target = fs::read_link(&link_path)
+            .with_context(|| format!("无法读取符号链接: {}", &link_path.display()))?;
+        // println!("target: {}, file_path: {}.", target.display(), file_path.display());
 
-        #[cfg(target_os = "linux")]
-        let links_iter = value.linux.links.iter();
-
-        for (_, link) in links_iter {
-            let link = path::PathBuf::from(link.as_str().unwrap());
-
-            let link = once::replace_home(link);
-            
-            match fs::remove_file(&link) {
-                Err(why) if why.kind() == ErrorKind::NotFound => {
-                    println!("link {} doesn't exit", link.display());
-                    continue;
-                },
-                Err(why) => panic!("couldn't remove {}: {:?}", link.display(), why),
-                Ok(_) => println!("successfully remove {}", link.display()),
-            };
-        }       
+        data.push((file, link_path, target == file_path));
     }
+
+    Ok(data)
 }
 
-pub fn install(programs: &[String]) {
-    println!("This is install! I receive {:?}", programs)
+/**
+返回绝对路径
+*/
+fn abs(path: &str) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    let path = path.replace('/', "\\");
+
+    // 先扩展 ~ 
+    let expanded = tilde_with_context(&path, || {
+        dirs::home_dir().map(|p| p.to_string_lossy().into_owned())
+    });
+ 
+    // 再扩展环境变量
+    let expanded = env_with_context(&expanded, |var: &str| -> Result<Option<String>, shellexpand::LookupError<std::env::VarError>> {
+        std::env::var(var)
+            .map(Some)
+            .map_err(|e| shellexpand::LookupError {
+                var_name: var.to_string(),
+                cause: e,
+            })
+    }).unwrap_or_else(|_| expanded.clone());
+    
+    PathBuf::from(expanded.into_owned())
 }
 
-pub fn migrate(programs: &[String]) {
-    println!("This is migrate! I receive {:?}", programs)
+fn symlink(file: &PathBuf, link: &PathBuf) -> Result<()> {
+    #[cfg(target_os = "linux")]
+    os_fs::symlink(original, link).expect("Something wrong");
+
+    #[cfg(target_os = "windows")]
+    if fs::metadata(file).map_or(false, |md| md.is_dir()) {
+        os_fs::symlink_dir(file, link)?;
+    } else if fs::metadata(file).map_or(false, |md| md.is_file()){
+        os_fs::symlink_file(file, link)?;
+    }
+
+    Ok(())
+}
+
+pub fn root_path() -> Result<PathBuf> {
+    let path = config_path();
+
+    let root = fs::read_to_string(&path)
+        .context("读取 root 路径错误。")?
+        .trim_end()
+        .to_string();
+
+    let root = abs(&root);
+
+    Ok(PathBuf::from(&root))
+}
+
+/**
+
+*/
+fn config_path() -> PathBuf {
+    let path = dirs::config_dir()
+        .unwrap()
+        .join("once");
+
+    path
+}
+
+pub fn get_table(program: &str) -> Result<Table> {
+    let path = root_path()
+        .context("获取 root 路径失败。")?
+        .join(program)
+        .join("once.toml");
+
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)
+                .context("创建配置目录失败")?;
+        }
+    }
+
+    let content = if path.exists() {
+        fs::read_to_string(&path)
+            .context(format!("读取配置文件失败: {}", path.display()))?
+    } else {
+        let default_content = "# 配置文档\n\n";
+        fs::write(&path, default_content)
+            .context(format!("创建配置文件失败: {}", path.display()))?;
+        default_content.to_string()
+    };
+    
+    let table = match toml::from_str::<Table>(&content) {
+        Ok(table) => table,
+        Err(e) => {
+            // 记录解析错误，但继续使用空表
+            eprintln!("警告: 配置文件解析失败 {}: {}", path.display(), e);
+            Table::new()
+        }
+    };
+    
+    Ok(table)
+}
+
+pub fn get_programs() -> Result<Vec<String>> {
+    let mut dirs = Vec::new();
+    let path = root_path()?;
+    
+    for entry in fs::read_dir(path.clone()).context(format!("root path: {}.", path.display()))? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_dir() {
+            if let Some(dir_name) = path.file_name() {
+                dirs.push(dir_name.to_string_lossy().to_string());
+            }
+        }
+    }
+    
+    Ok(dirs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abs_0() {
+        let result = abs("~/AppData/Roaming/Code/User/snippet");
+        assert_eq!(result.as_os_str().to_str().unwrap(), "C:/Users/34635/AppData/Roaming/Code/User/snippet");
+    }
 }
