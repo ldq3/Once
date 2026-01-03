@@ -1,4 +1,4 @@
-use std::{ env, error::Error, ffi::OsString, io, path::PathBuf };
+use std::{ fs, io };
 use structopt::StructOpt;
 
 mod local;
@@ -6,17 +6,15 @@ mod local;
 use local::get_table;
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "the tool for managing your settings")]
+#[structopt(about = "a tool for managing your settings")]
 enum Once {
     Init {
-        #[structopt(parse(from_os_str))]
-        root: OsString,
+        path: String,
     },
     New {
         program: String,
         file: String,
-        #[structopt(parse(from_os_str))]
-        link: PathBuf,
+        link: String,
     },
     List {
         opt: Option<String>,
@@ -26,15 +24,43 @@ enum Once {
 fn main() {
     env_logger::init();
 
-    let os_type = env::consts::OS;
-    log::debug!("OS: {}", os_type);
-
     let opt = Once::from_args();
-    log::debug!("command: {:?}", opt);
 
     match opt {
-        Once::Init { root: path } => {
-            local::init(path.to_str().unwrap()).unwrap();
+        Once::Init { path } => {
+            match local::root_path() {
+                Ok(root) => {
+                    let root = root.to_str().unwrap().to_string();
+                    
+                    if root != path {
+                        print!("❓ root 已存在：{}，是否覆盖？(y/any key else):", root);
+                        let mut input = String::new();
+                        io::stdin().read_line(&mut input).unwrap();
+                        
+                        let input = input.trim().to_lowercase();
+                        if input == "y" {
+                        } else {
+                            println!("🚫 操作已取消");
+                            
+                            return;
+                        }
+                        fs::rename(&root, &path)
+                            .expect(&format!("移动文件失败，from: {:?}, to: {:?}。", root, path));
+
+                        println!("root 初始化成功");
+
+                        return;
+                    }
+                },
+                Err(e) => {
+                    let io_err = e.downcast_ref::<std::io::Error>().unwrap();
+                    if io_err.kind() != std::io::ErrorKind::NotFound {
+                        panic!("{}", e);
+                    }
+                }
+            }
+
+            local::init(&path).unwrap();
         },
         Once::New { program, file, link } => {
             let table =  get_table(&program).unwrap();

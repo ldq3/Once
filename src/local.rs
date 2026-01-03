@@ -1,5 +1,5 @@
 use std::{
-    fmt::format, fs::{ self, File }, io::Write, path::PathBuf,
+    fs::{ self, File }, io::Write, path::PathBuf
 };
 #[cfg(target_os = "linux")]
 use std::os::unix::fs as os_fs;
@@ -10,25 +10,9 @@ use anyhow::{ Context, Result };
 use dirs;
 use shellexpand::{tilde_with_context, env_with_context};
 
-pub fn init(path: &str) -> Result<()> {
+pub fn init(path: &String) -> Result<()> {
     let path = abs(path);
     let config_path = config_path();
-
-    match root_path() {
-        Ok(root) => {
-            if path != root {
-                mov(&path)?;
-
-                return Ok(());
-            }
-        },
-        Err(e) => {
-            let io_err = e.downcast_ref::<std::io::Error>().unwrap();
-            if io_err.kind() != std::io::ErrorKind::NotFound {
-                return Err(e);
-            }
-        }
-    }
 
     let mut file = File::create(&config_path).context(format!("创建配置文件失败：{}", config_path.display()))?;
     writeln!(file, "{}", path.display())?;
@@ -37,42 +21,25 @@ pub fn init(path: &str) -> Result<()> {
 }
 
 /**
-#FIXME
-*/
-pub fn mov(root: &PathBuf) -> Result<()> {
-    let path = root_path()?; 
-
-    if root.to_str() != path.to_str() {
-        fs::rename(&path, root).context(format!("移动文件失败，from: {:?}, to: {:?}。", path.to_str(), root.to_str()))?;
-    }
-
-    Ok(())
-}
-
-/**
 向
 */
-pub fn new(program: &str, file: &str, link: &PathBuf) -> Result<()> { 
+pub fn new(program: &String, file: &String, link: &String) -> Result<()> { 
     let mut table =  get_table(program)?;
     
-    let path: Vec<Value> = link.iter()
-        .filter_map(|os_str| { os_str.to_str().map(|str| { Value::String(str.to_string())}) })
-        .collect();
-
-    table.insert(file.to_string(), toml::Value::Array(path));
-    fs::write(file, toml::to_string_pretty(&Value::Table(table))?)?;
-    
-    let file = root_path()?
+    let file_path = root_path()?
         .join(program)
         .join("settings")
         .join(file);
+    let link_path = abs(link);
+    symlink(&file_path, &link_path)?;
 
-    symlink(&file, link)?;
+    table.insert(file.to_string(), toml::Value::String(link.clone()));
+    fs::write(file, toml::to_string_pretty(&Value::Table(table))?)?;
 
     Ok(())
 }
 
-pub fn list(program: &str) -> Result<Vec<(String, PathBuf, bool)>> {
+pub fn list(program: &String) -> Result<Vec<(String, PathBuf, bool)>> {
     let table = get_table(program)?;
 
     let mut data = Vec::new();
@@ -172,7 +139,7 @@ fn config_path() -> PathBuf {
     path
 }
 
-pub fn get_table(program: &str) -> Result<Table> {
+pub fn get_table(program: &String) -> Result<Table> {
     let path = root_path()
         .context("获取 root 路径失败。")?
         .join(program)
