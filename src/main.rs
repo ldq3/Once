@@ -1,10 +1,10 @@
 mod local;
-mod link;
+mod print_tab;
 
-use std::{ fs, io };
+use std::{ fs, io, path::PathBuf };
 use structopt::StructOpt;
 use local::get_table;
-use link::LinkState;
+use print_tab::print_tab;
 
 #[derive(Debug, StructOpt)]
 #[structopt(about = "a tool for managing your settings")]
@@ -81,9 +81,13 @@ fn main() {
         },
         Command::List { opt } => {
             if let Some(program) = opt {
-                let data = local::list(&program).unwrap();
-                let link_state = LinkState::from_vec(data);
-                println!("{}", link_state);
+                let data = local::list(&program)
+                    .unwrap();
+                // let link_state = LinkState::from_vec(data);
+                // println!("{}", link_state);
+                let header = vec!["Target File", "Symlink", "State"];
+                let link_state = link_state(&data);
+                print_tab(&header, &link_state);
                 
             } else {
                 let programs = local::get_programs().unwrap();
@@ -103,3 +107,20 @@ fn main() {
         },
     };
 }
+
+pub fn link_state(items: &[(String, PathBuf, bool)]) -> Vec<Vec<&str>> {
+    items.iter()
+        .map(|(name, path, flag)| {
+            vec![
+                name.as_str(),
+                path.to_str().unwrap(),
+                if *flag {
+                    "✅ Ok"
+                } else {
+                    "❌ Broken"
+                },
+            ]
+        })
+        .collect()
+}
+
