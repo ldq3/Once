@@ -6,16 +6,31 @@ use std::os::unix::fs as os_fs;
 #[cfg(target_os = "windows")]
 use std::os::windows::fs as os_fs;
 use toml::{ Table, Value };
-use anyhow::{ Context, Result };
+use anyhow::{ Context, anyhow, Result };
 use dirs;
 use shellexpand::{tilde_with_context, env_with_context};
 
 pub fn init(path: &String) -> Result<()> {
+    root_path()?;
+
     let path = abs(path);
     let config_path = config_path();
 
     let mut file = File::create(&config_path).context(format!("创建配置文件失败：{}", config_path.display()))?;
     writeln!(file, "{}", path.display())?;
+
+    Ok(())
+}
+
+pub fn mov(path: &String) -> Result<()> {
+    let path = abs(&path);
+    let root = root_path()?;
+
+    if path != root {
+        fs::rename(&root, &path)?;
+
+        // 更新所有链接
+    }
 
     Ok(())
 }
@@ -33,7 +48,29 @@ pub fn new(program: &String, file: &String, link: &String) -> Result<()> {
     let link_path = abs(link);
     symlink(&file_path, &link_path)?;
 
-    table.insert(file.to_string(), toml::Value::String(link.clone()));
+    table.insert(file.to_string(), Value::String(link.clone()));
+    fs::write(file, toml::to_string_pretty(&Value::Table(table))?)?;
+
+    Ok(())
+}
+
+pub fn edit(program: &String, file: &String, link: &String) -> Result<()> {
+    let mut table = get_table(program)?;
+
+    let file_path = root_path()?
+        .join(program)
+        .join("settings")
+        .join(file);
+    let link_path = abs(link);
+    
+    let path = table
+        .get_mut(file)
+        .ok_or_else(|| anyhow!("条目不存在"))?;
+    fs::remove_file(PathBuf::from(path.to_string()))?;
+    symlink(&file_path, &link_path)?;
+
+    *path = Value::String(link.clone());
+
     fs::write(file, toml::to_string_pretty(&Value::Table(table))?)?;
 
     Ok(())
@@ -79,7 +116,7 @@ pub fn list(program: &String) -> Result<Vec<(String, PathBuf, bool)>> {
 /**
 返回绝对路径
 */
-fn abs(path: &str) -> PathBuf {
+pub fn abs(path: &str) -> PathBuf {
     #[cfg(target_os = "windows")]
     let path = path.replace('/', "\\");
 
@@ -131,7 +168,7 @@ pub fn root_path() -> Result<PathBuf> {
 /**
 
 */
-fn config_path() -> PathBuf {
+pub fn config_path() -> PathBuf {
     let path = dirs::config_dir()
         .unwrap()
         .join("once");
