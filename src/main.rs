@@ -1,5 +1,6 @@
 mod local;
 mod print_tab;
+mod path;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
